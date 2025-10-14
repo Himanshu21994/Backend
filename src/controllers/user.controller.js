@@ -6,6 +6,8 @@ import { uploadOnCloudinary } from "../utils/cloudnary.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import jwt from "jsonwebtoken";
 
+// snufsdfsdijfsojdifsdasdasd
+
 const generateAccessAndRefreshToken = async (userId) => {
     try{
         const user = await User.findById(userId);
@@ -118,7 +120,6 @@ const loginUser = asyncHandlers(async (req, res) => {
     const user = await User.findOne({
         $or: [ { email }, { username } ]
     });
-    console.log('user:', user);
 
     if(!user){
         throw new ApiError(404, "User not found with this email or username");
@@ -131,7 +132,6 @@ const loginUser = asyncHandlers(async (req, res) => {
     }
 
     const { accessToken, refreshToken } = await generateAccessAndRefreshToken(user._id);
-    console.log("Access Token:", accessToken);
 
     const loggedInUser = await User.findById(user._id)
         .select("-password -refreshToken");
@@ -235,9 +235,133 @@ const refreshAccessToken = asyncHandlers(async (req, res) => {
     }
 });
 
+const changeCurrentUserPassword = asyncHandlers(async (req, res) => {
+    const { oldPassword, newPassword } = req.body;
+
+    const user = await User.findById(req.user?._id);
+
+    const isPasswordCorrect = await user.isPasswordCorrect(oldPassword);
+
+    if (!isPasswordCorrect) {
+        throw new ApiError(401, "Old password is incorrect");
+    }
+
+    user.password = newPassword;
+    await user.save({ validateBeforeSave: false });
+
+    return res.status(200).json(
+        new ApiResponse(
+            200,
+            {},
+            "Password changed successfully"
+        )
+    );
+});
+
+const getCurrentUser = asyncHandlers(async (req, res) => {
+    return res
+        .status(200)
+        .json(
+            new ApiResponse(
+                200,
+                req.user,
+                "Current user fetched successfully"
+            )
+        );
+});
+
+const updateAccountDetails = asyncHandlers(async (req, res) => {
+    const { fullName,email } = req.body;
+
+    if(!fullName || !email){
+        throw new ApiError(400, "Fullname and email are required");
+    }
+
+    const user = await User.findByIdAndUpdate(
+        req.user?._id,
+        { 
+            $set: { fullName, email }
+        },
+        { new: true }
+    ).select("-password -refreshToken");
+
+
+    await user.save();
+
+    return res.status(200).json(
+        new ApiResponse(
+            200,
+            user,
+            "Account details updated successfully"
+        )
+    );
+});
+
+const updateUserAvatar = asyncHandlers(async (req, res) => {
+    const avatarLocalPath = req.file?.path;
+
+    if(!avatarLocalPath){
+        throw new ApiError(400, "Avatar image is required");
+    }
+
+    const avatar = await uploadOnCloudinary(avatarLocalPath);
+    
+    if(!avatar.url){
+        throw new ApiError(500, "Error in uploading avatar image");
+    }
+
+    const user = await User.findByIdAndUpdate(
+        req.user?._id,
+        { $set: { avatar: avatar.url } },
+        { new: true }
+    );
+
+    return res.status(200).json(
+        new ApiResponse(
+            200,
+            { avatar: avatar.url },
+            "Avatar updated successfully"
+        )
+    );
+});
+
+const updateUserCoverImage = asyncHandlers(async (req, res) => {
+    const coverImageLocalPath = req.file?.path;
+
+    if(!coverImageLocalPath){
+        throw new ApiError(400, "Cover image is required");
+    }
+
+    const coverImage = await uploadOnCloudinary(coverImageLocalPath);
+
+    if(!coverImage.url){
+        throw new ApiError(500, "Error in uploading cover image");
+    }
+
+    const user = await User.findByIdAndUpdate(
+        req.user?._id,
+        { $set: { coverImage: coverImage.url } },
+        { new: true }
+    );
+
+    return res.status(200).json(
+        new ApiResponse(
+            200,
+            { coverImage: coverImage.url },
+            "Cover image updated successfully"
+        )
+    );
+});
+ 
+
 export { 
     registerUser,
     loginUser,
     logoutUser,
-    refreshAccessToken
+    refreshAccessToken,
+    changeCurrentUserPassword,
+    getCurrentUser,
+    updateAccountDetails,
+    updateUserAvatar,
+    updateUserCoverImage
 };
