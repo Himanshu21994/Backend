@@ -350,6 +350,78 @@ const updateUserCoverImage = asyncHandlers(async (req, res) => {
         )
     );
 });
+
+const getUserChannelProfile = asyncHandlers(async (req, res) => {
+    const { username } = req.params;
+
+    if(!username?.trim()){
+        throw new ApiError(400, "Username is required");
+    }
+
+    // return value will be array of objects
+    const channel = await User.aggregate([
+        {
+            $match: {
+                username: username.toLowerCase()
+            }
+        },
+        {
+            $lookup: {
+                from: "subscriptions",          // collection name in db. // every value in model convert to lowercase and becomes plural
+                localField: "_id",              // Yeh user ka _id field hai. Matlab, jis user ki profile dekh rahe ho, uska unique id.
+                foreignField: "channel",        // "subscriptions" collection mein ek field hai channel. Is field mein user ka id store hota hai, jisko log subscribe karte hain.
+                as: "subscribers"               // as: "subscribers" matlab jo matching data milega, usko ek array ke roop mein subscribers naam se user object mein daal dega.
+            }
+        },
+        {
+            $lookup: {
+                from: "subscriptions",
+                localField: "_id",
+                foreignField: "subscriber",
+                as: "subscribedTo"
+            }
+        },
+        {
+            $addFields: {
+                subscribersCount: { $size: "$subscribers" },   // $size operator se hum array ki length nikal sakte hain
+                channelsSubscribedToCount: { $size: "$subscribedTo" },
+                isSubscribed: {
+                    $cond: {
+                        if: {$in: [req.user?._id, "$subscribers.subscriber"]},   // $in operator se check karte hain ki kya current logged in user ka id subscribers array mein hai
+                        then: true,
+                        else: false
+                    }
+                }
+            }
+        },
+        {
+            $project: {
+                fullName: 1,
+                username: 1,
+                email: 1,
+                avatar: 1,
+                coverImage: 1,
+                subscribersCount: 1,
+                channelsSubscribedToCount: 1,
+                isSubscribed: 1,
+                createdAt: 1
+            }
+        }
+    ])   
+    
+    if(!channel?.length){
+        throw new ApiError(404, "Channel does not exist");
+    }
+    
+    return res.status(200).json(
+        new ApiResponse(
+            200,
+            channel[0],    // channel ek array hai jisme ek hi object hoga, toh hum uska pehla element return kar rahe hain
+            "User channel profile fetched successfully"
+        )
+    );
+
+});
  
 
 export { 
@@ -361,5 +433,6 @@ export {
     getCurrentUser,
     updateAccountDetails,
     updateUserAvatar,
-    updateUserCoverImage
+    updateUserCoverImage,
+    getUserChannelProfile
 };
