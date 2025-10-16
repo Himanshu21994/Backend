@@ -5,6 +5,7 @@ import { User } from "../models/user.model.js";
 import { uploadOnCloudinary } from "../utils/cloudnary.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import jwt from "jsonwebtoken";
+import mongoose from "mongoose";
 
 const generateAccessAndRefreshToken = async (userId) => {
     try{
@@ -158,8 +159,13 @@ const loginUser = asyncHandlers(async (req, res) => {
 const logoutUser = asyncHandlers(async (req, res) => {
     await User.findByIdAndUpdate(req.user._id, 
         {
-            $set: {
-                refreshToken: undefined
+            // $set: {
+            //     refreshToken: undefined      // Using $set: { refreshToken: undefined } sets the field value to undefined, but the field still exists in the document.
+            // }
+            $unset: {
+                refreshToken: 1                  // Using $unset: { refreshToken: 1 } completely removes the field from the document.
+
+
             }
         },
         [
@@ -409,14 +415,13 @@ const getUserChannelProfile = asyncHandlers(async (req, res) => {
         }
     ])   
     
-    if(!channel?.length){
+    if (!Array.isArray(channel) || channel.length === 0) {
         throw new ApiError(404, "Channel does not exist");
     }
-    
     return res.status(200).json(
         new ApiResponse(
             200,
-            channel[0],    // channel ek array hai jisme ek hi object hoga, toh hum uska pehla element return kar rahe hain
+            channel[0],
             "User channel profile fetched successfully"
         )
     );
@@ -424,7 +429,7 @@ const getUserChannelProfile = asyncHandlers(async (req, res) => {
 });
  
 const  getWatchHistory = asyncHandlers(async (req, res) => {
-    const user5 = await User.aggregate([
+    const user = await User.aggregate([
         {
             $match: {
                 _id: new mongoose.Types.ObjectId(req.user?._id)
